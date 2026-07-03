@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Evidence Album</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+<style>
+  :root{
+    --bg:#F7F6F3; --surface:#FFFFFF; --ink:#22303F; --muted:#6B7684;
+    --accent:#8E3B4F; --accent-ink:#FFFFFF; --accent-soft:#F4E6EA;
+    --line:#E4E1DB; --shadow:0 1px 3px rgba(34,48,63,.08), 0 6px 18px rgba(34,48,63,.06);
+    --radius:14px;
+  }
+  [data-theme="dark"]{
+    --bg:#141A22; --surface:#1C242E; --ink:#E9E7E2; --muted:#93A0AD;
+    --accent:#C86477; --accent-ink:#1A1216; --accent-soft:#382230;
+    --line:#2A343F; --shadow:0 1px 3px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font:15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:calc(84px + env(safe-area-inset-bottom));
+  }
+  .display{font-family:"Fraunces", Georgia, serif; font-weight:600; letter-spacing:-.01em}
+
+  /* ---------- Header ---------- */
+  header{
+    position:sticky; top:0; z-index:40; background:var(--bg);
+    border-bottom:1px solid var(--line);
+    padding:14px 18px 12px; display:flex; align-items:center; gap:12px;
+  }
+  header .title{flex:1; min-width:0}
+  header h1{margin:0; font-size:20px}
+  header .sub{font-size:12px; color:var(--muted)}
+  .iconbtn{
+    background:var(--surface); border:1px solid var(--line); color:var(--ink);
+    width:38px; height:38px; border-radius:11px; cursor:pointer; font-size:16px;
+    display:inline-flex; align-items:center; justify-content:center; flex:none;
+  }
+  .iconbtn:active{transform:scale(.96)}
+
+  /* ---------- Timeline strip ---------- */
+  .timeline{
+    display:flex; gap:8px; overflow-x:auto; padding:14px 18px 4px; scrollbar-width:none;
+  }
+  .timeline::-webkit-scrollbar{display:none}
+  .yearchip{
+    flex:none; text-align:center; padding:7px 12px; border-radius:10px;
+    background:var(--surface); border:1px solid var(--line); font-size:12.5px; color:var(--muted);
+  }
+  .yearchip b{display:block; color:var(--ink); font-size:14px}
+  .yearchip.gap{border-style:dashed; border-color:var(--accent); color:var(--accent)}
+  .yearchip.gap b{color:var(--accent)}
+  .timeline-hint{padding:2px 18px 0; font-size:11.5px; color:var(--muted)}
+
+  /* ---------- Toolbar ---------- */
+  .toolbar{padding:12px 18px 4px; display:flex; flex-wrap:wrap; gap:8px; align-items:center}
+  .chip{
+    border:1px solid var(--line); background:var(--surface); color:var(--muted);
+    padding:6px 12px; border-radius:999px; font-size:13px; cursor:pointer; flex:none;
+  }
+  .chip.active{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
+  select.sortsel{
+    margin-left:auto; border:1px solid var(--line); background:var(--surface); color:var(--ink);
+    padding:7px 10px; border-radius:10px; font-size:13px;
+  }
+
+  /* ---------- Grid ---------- */
+  .grid{
+    display:grid; gap:16px; padding:14px 18px 30px;
+    grid-template-columns:repeat(auto-fill, minmax(310px, 1fr));
+  }
+  @media (max-width:380px){ .grid{grid-template-columns:1fr} }
+
+  .card{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); overflow:hidden; position:relative;
+  }
+  .card .photo{position:relative; background:#00000010}
+  .card .photo img{width:100%; height:230px; object-fit:cover; display:block}
+  .exhibit{
+    position:absolute; top:10px; left:10px; background:var(--accent); color:var(--accent-ink);
+    font-family:"Fraunces", Georgia, serif; font-size:12.5px; font-weight:600;
+    padding:4px 10px; border-radius:7px; letter-spacing:.02em;
+  }
+  .cardtools{position:absolute; top:8px; right:8px; display:flex; gap:6px}
+  .cardtools button{
+    background:rgba(20,26,34,.55); color:#fff; border:none; width:32px; height:32px;
+    border-radius:9px; cursor:pointer; font-size:14px; backdrop-filter:blur(4px);
+  }
+  .fields{padding:12px 14px 14px; display:grid; gap:9px}
+  .fields .row2{display:grid; grid-template-columns:1fr 1fr; gap:9px}
+  .fields label{display:block; font-size:11px; color:var(--muted); margin:0 0 3px 2px; text-transform:uppercase; letter-spacing:.05em}
+  .fields input, .fields select, .fields textarea{
+    width:100%; border:1px solid var(--line); background:var(--bg); color:var(--ink);
+    border-radius:9px; padding:8px 10px; font-size:14px; font-family:inherit;
+  }
+  .fields textarea{resize:vertical; min-height:54px}
+  .fields input:focus, .fields select:focus, .fields textarea:focus{outline:2px solid var(--accent); outline-offset:1px; border-color:transparent}
+
+  /* ---------- Empty state ---------- */
+  .empty{max-width:460px; margin:60px auto; text-align:center; padding:0 24px}
+  .empty .display{font-size:24px; margin-bottom:8px}
+  .empty p{color:var(--muted)}
+
+  /* ---------- Bottom bar ---------- */
+  .bottombar{
+    position:fixed; left:0; right:0; bottom:0; z-index:40;
+    background:var(--surface); border-top:1px solid var(--line);
+    padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+    display:flex; gap:10px; justify-content:center;
+  }
+  .btn{
+    border:none; border-radius:12px; padding:12px 20px; font-size:15px; font-weight:600;
+    cursor:pointer; font-family:inherit;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--accent); color:var(--accent-ink)}
+  .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--ink)}
+  .btn:disabled{opacity:.5; cursor:default}
+
+  /* ---------- Modal ---------- */
+  .modal-back{
+    position:fixed; inset:0; background:rgba(10,14,20,.55); z-index:60;
+    display:none; align-items:flex-end; justify-content:center;
+  }
+  .modal-back.open{display:flex}
+  @media(min-width:640px){ .modal-back{align-items:center} }
+  .modal{
+    background:var(--surface); width:100%; max-width:480px; max-height:88vh; overflow-y:auto;
+    border-radius:18px 18px 0 0; padding:22px 22px calc(22px + env(safe-area-inset-bottom));
+  }
+  @media(min-width:640px){ .modal{border-radius:18px} }
+  .modal h2{margin:0 0 4px; font-size:20px}
+  .modal .mnote{font-size:13px; color:var(--muted); margin:0 0 16px}
+  .modal .mfield{margin-bottom:13px}
+  .modal label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px}
+  .modal input[type=text], .modal select{
+    width:100%; border:1px solid var(--line); background:var(--bg); color:var(--ink);
+    border-radius:10px; padding:10px 12px; font-size:15px; font-family:inherit;
+  }
+  .modal .mactions{display:flex; gap:10px; margin-top:18px}
+  .modal .mactions .btn{flex:1}
+
+  /* ---------- Lock screen ---------- */
+  .lock{
+    position:fixed; inset:0; z-index:100; background:var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center;
+  }
+  .lock .display{font-size:28px; margin:14px 0 4px}
+  .lock p{color:var(--muted); max-width:320px; font-size:14px}
+  .lock input{
+    font-size:26px; letter-spacing:.4em; text-align:center; width:220px;
+    border:1px solid var(--line); background:var(--surface); color:var(--ink);
+    border-radius:12px; padding:12px 8px 12px 16px; margin:14px 0 6px;
+  }
+  .lock .err{color:var(--accent); font-size:13px; min-height:18px}
+  .lock .tiny{font-size:12px; color:var(--muted); margin-top:22px}
+  .lock .tiny button{background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;text-decoration:underline}
+  .seal{
+    width:58px;height:58px;border-radius:50%;background:var(--accent);color:var(--accent-ink);
+    display:flex;align-items:center;justify-content:center;font-size:26px;
+    font-family:"Fraunces",Georgia,serif;font-weight:600;
+  }
+
+  .toast{
+    position:fixed; bottom:calc(96px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    background:var(--ink); color:var(--bg); padding:10px 18px; border-radius:12px; font-size:14px;
+    z-index:80; opacity:0; transition:opacity .25s; pointer-events:none; max-width:88vw; text-align:center;
+  }
+  .toast.show{opacity:1}
+  .busy{
+    position:fixed; inset:0; z-index:90; background:rgba(10,14,20,.5); display:none;
+    align-items:center; justify-content:center; color:#fff; font-size:15px; flex-direction:column; gap:12px;
+  }
+  .busy.show{display:flex}
+  .spinner{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){ .spinner{animation-duration:2.5s} .btn:active,.iconbtn:active{transform:none} }
+</style>
+</head>
+<body>
+
+<!-- ======== Lock / PIN ======== -->
+<div class="lock" id="lockScreen">
+  <div class="seal">EA</div>
+  <div class="display" id="lockTitle">Evidence Album</div>
+  <p id="lockMsg">Enter your PIN to open the album.</p>
+  <input id="pinInput" type="password" inputmode="numeric" autocomplete="off" maxlength="6" placeholder="&#8226;&#8226;&#8226;&#8226;">
+  <div class="err" id="pinErr"></div>
+  <button class="btn primary" id="pinGo" style="min-width:180px">Unlock</button>
+  <div class="tiny" id="lockFoot">
+    The PIN is a courtesy lock for shared devices, not encryption. Your photos stay on this device.<br>
+    <button id="pinReset">Forgot PIN? Reset it</button>
+  </div>
+</div>
+
+<!-- ======== App ======== -->
+<div id="app" style="display:none">
+  <header>
+    <div class="title">
+      <h1 class="display">Evidence Album</h1>
+      <div class="sub" id="headSub">I-751 photo evidence &mdash; private, stored on this device</div>
+    </div>
+    <button class="iconbtn" id="backupBtn" title="Backup and restore">&#128190;</button>
+    <button class="iconbtn" id="themeBtn" title="Light or dark mode">&#9789;</button>
+    <button class="iconbtn" id="lockBtn" title="Lock the album">&#128274;</button>
+  </header>
+
+  <div class="timeline" id="timeline"></div>
+  <div class="timeline-hint" id="timelineHint"></div>
+
+  <div class="toolbar" id="chipbar"></div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="empty" id="empty" style="display:none">
+    <div class="display">Start the album</div>
+    <p>Add photos from your library. Dates are read automatically from each photo when available &mdash; then add who's in it, where it was, and why it matters.</p>
+  </div>
+
+  <div class="bottombar">
+    <button class="btn primary" id="addBtn">+ Add photos</button>
+    <button class="btn ghost" id="pdfBtn">Create PDF</button>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" multiple style="display:none">
+  <input type="file" id="restoreInput" accept="application/json" style="display:none">
+</div>
+
+<!-- ======== PDF options modal ======== -->
+<div class="modal-back" id="pdfModalBack">
+  <div class="modal">
+    <h2 class="display">Create the PDF packet</h2>
+    <p class="mnote">A cover page and captions are generated from your entries. Images are compressed for a printable file size.</p>
+    <div class="mfield"><label>Packet title</label><input type="text" id="pdfTitle" value="Photographic Evidence of Bona Fide Marriage"></div>
+    <div class="mfield"><label>Petitioner &amp; spouse (as on the I-751)</label><input type="text" id="pdfNames" placeholder="e.g., Keii and Matthew"></div>
+    <div class="mfield"><label>Arrange photos</label>
+      <select id="pdfGroup">
+        <option value="chrono">Chronologically (one flow, recommended)</option>
+        <option value="category">Grouped by category with section headers</option>
+      </select>
+    </div>
+    <div class="mfield"><label>Photos per page</label>
+      <select id="pdfPerPage"><option value="2">2 per page (recommended)</option><option value="1">1 per page (larger images)</option></select>
+    </div>
+    <div class="mactions">
+      <button class="btn ghost" id="pdfCancel">Cancel</button>
+      <button class="btn ghost" id="pdfPreview">Preview</button>
+      <button class="btn primary" id="pdfDownload">Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======== Backup modal ======== -->
+<div class="modal-back" id="backupModalBack">
+  <div class="modal">
+    <h2 class="display">Backup &amp; transfer</h2>
+    <p class="mnote">Everything lives only in this browser. A backup file lets you keep a safe copy or move the album to another device (AirDrop it, then restore there). The file can be large.</p>
+    <div class="mactions" style="margin-top:6px">
+      <button class="btn ghost" id="backupClose">Close</button>
+      <button class="btn ghost" id="restoreBtn">Restore from file</button>
+      <button class="btn primary" id="exportBackup">Save backup file</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="busy" id="busy"><div class="spinner"></div><div id="busyMsg">Working&hellip;</div></div>
+
+<script>
+"use strict";
+/* =================== Constants =================== */
+const CATEGORIES = [
+  "Courtship / Pre-Marriage",
+  "Engagement / K-1 Journey",
+  "Wedding / Marriage",
+  "Family & Friends",
+  "Travel Together",
+  "Holidays / Special Events",
+  "Daily Married Life",
+  "Other"
+];
+const DB_NAME = "evidence-album", STORE = "photos";
+const $ = id => document.getElementById(id);
+
+/* =================== IndexedDB =================== */
+let db;
+function openDB(){
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open(DB_NAME, 1);
+    rq.onupgradeneeded = e => {
+      const d = e.target.result;
+      if(!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE, {keyPath:"id"});
+    };
+    rq.onsuccess = e => { db = e.target.result; res(); };
+    rq.onerror = () => rej(rq.error);
+  });
+}
+function tx(mode){ return db.transaction(STORE, mode).objectStore(STORE); }
+function dbPut(rec){ return new Promise((res,rej)=>{ const r=tx("readwrite").put(rec); r.onsuccess=res; r.onerror=()=>rej(r.error); }); }
+function dbDel(id){ return new Promise((res,rej)=>{ const r=tx("readwrite").delete(id); r.onsuccess=res; r.onerror=()=>rej(r.error); }); }
+function dbAll(){ return new Promise((res,rej)=>{ const r=tx("readonly").getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error); }); }
+
+/* =================== State =================== */
+let photos = [];            // in-memory copy of records (blobs included)
+let filterCat = "All";
+let sortMode = localStorage.getItem("ea-sort") || "oldest";
+const thumbURLs = new Map(); // id -> objectURL
+
+/* =================== Utilities =================== */
+function toast(msg, ms=2600){ const t=$("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"), ms); }
+function busy(on, msg){ $("busy").classList.toggle("show", !!on); if(msg) $("busyMsg").textContent = msg; }
+function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmtDate(iso){
+  if(!iso) return "Date not set";
+  const [y,m,d] = iso.split("-").map(Number);
+  const dt = new Date(y, m-1, d||1);
+  return dt.toLocaleDateString(undefined, {year:"numeric", month:"long", day:"numeric"});
+}
+async function sha256(text){
+  if(crypto && crypto.subtle){
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("ea-salt::"+text));
+    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  }
+  return "plain::"+text; // very old browsers: courtesy fallback
+}
+function blobToDataURL(blob){
+  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(blob); });
+}
+function dataURLToBlob(durl){
+  const [head, b64] = durl.split(",");
+  const mime = (head.match(/data:(.*?);/)||[])[1] || "image/jpeg";
+  const bin = atob(b64); const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new Blob([arr], {type:mime});
+}
+async function decodeToImage(blob){
+  const url = URL.createObjectURL(blob);
+  try{
+    const img = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=()=>rej(new Error("decode")); i.src=url; });
+    return img;
+  } finally { setTimeout(()=>URL.revokeObjectURL(url), 3000); }
+}
+async function compress(blob, maxDim, quality){
+  const img = await decodeToImage(blob);
+  const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth*scale)), h = Math.max(1, Math.round(img.naturalHeight*scale));
+  const c = document.createElement("canvas"); c.width=w; c.height=h;
+  c.getContext("2d").drawImage(img, 0, 0, w, h);
+  const out = await new Promise(res=>c.toBlob(res, "image/jpeg", quality));
+  return {blob: out, w, h};
+}
+
+/* =================== PIN / lock =================== */
+let settingPin = false;
+async function initLock(){
+  const hash = localStorage.getItem("ea-pin");
+  if(!hash){
+    settingPin = true;
+    $("lockTitle").textContent = "Set a PIN";
+    $("lockMsg").textContent = "Choose a 4\u20136 digit PIN for this album.";
+    $("pinGo").textContent = "Set PIN";
+    $("pinReset").style.display = "none";
+  }
+  $("pinInput").focus();
+}
+async function handlePin(){
+  const v = $("pinInput").value.trim();
+  if(!/^\d{4,6}$/.test(v)){ $("pinErr").textContent = "Use 4\u20136 digits."; return; }
+  const h = await sha256(v);
+  if(settingPin){
+    localStorage.setItem("ea-pin", h);
+    settingPin = false;
+    unlock();
+  } else if(h === localStorage.getItem("ea-pin")){
+    unlock();
+  } else {
+    $("pinErr").textContent = "That PIN doesn't match.";
+    $("pinInput").value = ""; $("pinInput").focus();
+  }
+}
+function unlock(){
+  $("pinErr").textContent = ""; $("pinInput").value = "";
+  $("lockScreen").style.display = "none";
+  $("app").style.display = "block";
+}
+function lock(){
+  $("app").style.display = "none";
+  $("lockScreen").style.display = "flex";
+  $("lockTitle").textContent = "Evidence Album";
+  $("lockMsg").textContent = "Enter your PIN to open the album.";
+  $("pinGo").textContent = "Unlock";
+  $("pinInput").focus();
+}
+$("pinGo").addEventListener("click", handlePin);
+$("pinInput").addEventListener("keydown", e=>{ if(e.key==="Enter") handlePin(); });
+$("pinReset").addEventListener("click", ()=>{
+  if(confirm("Reset the PIN? Your photos and captions are kept \u2014 you'll just choose a new PIN.")){
+    localStorage.removeItem("ea-pin");
+    settingPin = true;
+    $("lockTitle").textContent = "Set a new PIN";
+    $("lockMsg").textContent = "Choose a 4\u20136 digit PIN.";
+    $("pinGo").textContent = "Set PIN";
+    $("pinReset").style.display = "none";
+    $("pinErr").textContent = "";
+    $("pinInput").value = ""; $("pinInput").focus();
+  }
+});
+$("lockBtn").addEventListener("click", lock);
+
+/* =================== Theme =================== */
+function applyTheme(t){ document.documentElement.setAttribute("data-theme", t); localStorage.setItem("ea-theme", t); $("themeBtn").innerHTML = t==="dark" ? "&#9788;" : "&#9789;"; }
+applyTheme(localStorage.getItem("ea-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+$("themeBtn").addEventListener("click", ()=> applyTheme(document.documentElement.getAttribute("data-theme")==="dark" ? "light" : "dark"));
+
+/* =================== Import photos =================== */
+$("addBtn").addEventListener("click", ()=> $("fileInput").click());
+$("fileInput").addEventListener("change", async e=>{
+  const files = [...e.target.files]; e.target.value = "";
+  if(!files.length) return;
+  busy(true, `Adding photo 1 of ${files.length}\u2026`);
+  let ok = 0, failed = 0;
+  for(let i=0;i<files.length;i++){
+    $("busyMsg").textContent = `Adding photo ${i+1} of ${files.length}\u2026`;
+    try{
+      const f = files[i];
+      let dateISO = "", gpsNote = "";
+      try{
+        if(window.exifr){
+          const meta = await exifr.parse(f).catch(()=>null);
+          const dt = meta && (meta.DateTimeOriginal || meta.CreateDate || meta.ModifyDate);
+          if(dt instanceof Date && !isNaN(dt)){
+            // Use local date components; toISOString() would shift across timezones
+            dateISO = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+          }
+          if(meta && typeof meta.latitude === "number") gpsNote = `GPS: ${meta.latitude.toFixed(4)}, ${meta.longitude.toFixed(4)}`;
+        }
+      }catch(_){}
+      const display = await compress(f, 2000, 0.88);
+      const thumb   = await compress(f, 520, 0.8);
+      const rec = {
+        id: Date.now() + "-" + Math.random().toString(36).slice(2,8),
+        blob: display.blob, w: display.w, h: display.h,
+        thumb: thumb.blob,
+        date: dateISO, location: "", people: "",
+        category: "Other", caption: "", notes: gpsNote,
+        order: photos.length + i,
+        addedAt: Date.now()
+      };
+      await dbPut(rec);
+      photos.push(rec);
+      ok++;
+    }catch(err){ console.error(err); failed++; }
+  }
+  busy(false);
+  renderAll();
+  toast(failed ? `Added ${ok}. ${failed} couldn't be read (format not supported by this browser).` : `Added ${ok} photo${ok===1?"":"s"}.`);
+});
+
+/* =================== Sorting / filtering =================== */
+function sortedPhotos(){
+  const arr = [...photos];
+  if(sortMode === "manual"){ arr.sort((a,b)=> (a.order??0)-(b.order??0)); }
+  else {
+    arr.sort((a,b)=>{
+      const da = a.date || "9999-99-99", dbb = b.date || "9999-99-99";
+      const cmp = da.localeCompare(dbb) || (a.addedAt-b.addedAt);
+      return sortMode==="newest" ? -cmp : cmp;
+    });
+  }
+  return arr;
+}
+function visiblePhotos(){
+  const arr = sortedPhotos();
+  return filterCat==="All" ? arr : arr.filter(p=>p.category===filterCat);
+}
+
+/* =================== Render =================== */
+function renderAll(){ renderTimeline(); renderChips(); renderGrid(); }
+
+function renderTimeline(){
+  const tl = $("timeline"), hint = $("timelineHint");
+  const dated = photos.filter(p=>p.date);
+  if(!dated.length){ tl.innerHTML=""; hint.textContent=""; return; }
+  const counts = {};
+  dated.forEach(p=>{ const y = p.date.slice(0,4); counts[y]=(counts[y]||0)+1; });
+  const years = Object.keys(counts).map(Number);
+  const min = Math.min(...years), max = Math.max(...years);
+  let html = "", gaps = 0;
+  for(let y=min; y<=max; y++){
+    const c = counts[y]||0;
+    if(!c) gaps++;
+    html += `<div class="yearchip ${c? "":"gap"}"><b>${y}</b>${c ? c+" photo"+(c===1?"":"s") : "no photos"}</div>`;
+  }
+  tl.innerHTML = html;
+  const undated = photos.length - dated.length;
+  hint.textContent = (gaps? `${gaps} year${gaps===1?"":"s"} with no photos \u2014 gaps are worth filling if you can. ` : "Good coverage across the timeline. ")
+    + (undated? `${undated} photo${undated===1?"":"s"} still need a date.` : "");
+}
+
+function renderChips(){
+  const bar = $("chipbar");
+  const counts = {All: photos.length};
+  photos.forEach(p=> counts[p.category]=(counts[p.category]||0)+1);
+  let html = "";
+  ["All", ...CATEGORIES].forEach(c=>{
+    if(c!=="All" && !counts[c]) return;
+    html += `<button class="chip ${filterCat===c?"active":""}" data-cat="${esc(c)}">${esc(c)}${counts[c]?` \u00b7 ${counts[c]}`:""}</button>`;
+  });
+  html += `<select class="sortsel" id="sortSel">
+    <option value="oldest" ${sortMode==="oldest"?"selected":""}>Oldest first</option>
+    <option value="newest" ${sortMode==="newest"?"selected":""}>Newest first</option>
+    <option value="manual" ${sortMode==="manual"?"selected":""}>Manual order</option>
+  </select>`;
+  bar.innerHTML = html;
+  bar.querySelectorAll(".chip").forEach(ch=> ch.addEventListener("click", ()=>{ filterCat = ch.dataset.cat; renderChips(); renderGrid(); }));
+  $("sortSel").addEventListener("change", e=>{
+    sortMode = e.target.value; localStorage.setItem("ea-sort", sortMode);
+    if(sortMode==="manual"){ // seed manual order from current chrono order
+      sortedPhotos(); const chrono=[...photos].sort((a,b)=>((a.date||"9999")+"").localeCompare(b.date||"9999")||(a.addedAt-b.addedAt));
+      chrono.forEach((p,i)=>{ p.order=i; dbPut(p); });
+    }
+    renderGrid();
+  });
+}
+
+function renderGrid(){
+  const grid = $("grid"), vis = visiblePhotos();
+  $("empty").style.display = photos.length ? "none" : "block";
+  $("headSub").textContent = photos.length
+    ? `${photos.length} photo${photos.length===1?"":"s"} \u00b7 private, stored on this device`
+    : "I-751 photo evidence \u2014 private, stored on this device";
+  grid.innerHTML = "";
+  const ordered = sortedPhotos(); // for exhibit numbering across all photos
+  const numOf = new Map(ordered.map((p,i)=>[p.id, i+1]));
+  vis.forEach(p=>{
+    if(!thumbURLs.has(p.id)) thumbURLs.set(p.id, URL.createObjectURL(p.thumb || p.blob));
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="photo">
+        <img src="${thumbURLs.get(p.id)}" alt="Photo ${numOf.get(p.id)}">
+        <div class="exhibit">No. ${String(numOf.get(p.id)).padStart(2,"0")}</div>
+        <div class="cardtools">
+          ${sortMode==="manual" ? `<button data-act="up" title="Move earlier">&#8593;</button><button data-act="down" title="Move later">&#8595;</button>` : ""}
+          <button data-act="del" title="Remove photo">&#10005;</button>
+        </div>
+      </div>
+      <div class="fields">
+        <div class="row2">
+          <div><label>Date</label><input type="date" data-f="date" value="${esc(p.date)}"></div>
+          <div><label>Category</label><select data-f="category">${CATEGORIES.map(c=>`<option ${p.category===c?"selected":""}>${esc(c)}</option>`).join("")}</select></div>
+        </div>
+        <div><label>Location</label><input type="text" data-f="location" placeholder="City, State / Country" value="${esc(p.location)}"></div>
+        <div><label>People in photo</label><input type="text" data-f="people" placeholder="e.g., Keii, Matthew, Matthew's mother" value="${esc(p.people)}"></div>
+        <div><label>Caption \u2014 occasion &amp; why it matters</label><textarea data-f="caption" placeholder="e.g., Celebrating Mother's Day with Matthew's family \u2014 ongoing family integration after marriage.">${esc(p.caption)}</textarea></div>
+        <div><label>Notes (not printed)</label><input type="text" data-f="notes" value="${esc(p.notes)}"></div>
+      </div>`;
+    card.querySelectorAll("[data-f]").forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        p[inp.dataset.f] = inp.value;
+        dbPut(p).then(()=>{ if(inp.dataset.f==="date"){ renderTimeline(); } if(inp.dataset.f==="category"){ renderChips(); } });
+      });
+    });
+    card.querySelectorAll("[data-act]").forEach(btn=>{
+      btn.addEventListener("click", async ()=>{
+        if(btn.dataset.act==="del"){
+          if(!confirm("Remove this photo from the album?")) return;
+          await dbDel(p.id);
+          photos = photos.filter(x=>x.id!==p.id);
+          const u = thumbURLs.get(p.id); if(u){ URL.revokeObjectURL(u); thumbURLs.delete(p.id); }
+          renderAll();
+        } else {
+          const arr = sortedPhotos(); const i = arr.findIndex(x=>x.id===p.id);
+          const j = btn.dataset.act==="up" ? i-1 : i+1;
+          if(j<0 || j>=arr.length) return;
+          const a=arr[i], b=arr[j]; const t=a.order; a.order=b.order; b.order=t;
+          await dbPut(a); await dbPut(b);
+          renderGrid();
+        }
+      });
+    });
+    grid.appendChild(card);
+  });
+}
+
+/* =================== PDF =================== */
+$("pdfBtn").addEventListener("click", ()=>{
+  if(!photos.length){ toast("Add some photos first."); return; }
+  $("pdfModalBack").classList.add("open");
+});
+$("pdfCancel").addEventListener("click", ()=> $("pdfModalBack").classList.remove("open"));
+$("pdfPreview").addEventListener("click", ()=> makePDF("preview"));
+$("pdfDownload").addEventListener("click", ()=> makePDF("download"));
+
+async function makePDF(mode){
+  $("pdfModalBack").classList.remove("open");
+  busy(true, "Building the PDF\u2026");
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:"pt", format:"letter"}); // 612 x 792
+    const M = 56, W = 612, H = 792, CW = W - 2*M;
+    const title = $("pdfTitle").value.trim() || "Photographic Evidence of Bona Fide Marriage";
+    const names = $("pdfNames").value.trim();
+    const group = $("pdfGroup").value, perPage = +$("pdfPerPage").value;
+
+    // Order: chronological (undated last); grouped mode sorts by category then date
+    let list = [...photos].sort((a,b)=> ((a.date||"9999")+"").localeCompare(b.date||"9999") || (a.addedAt-b.addedAt));
+    if(sortMode==="manual") list = [...photos].sort((a,b)=>(a.order??0)-(b.order??0));
+    if(group==="category"){
+      const idx = c => CATEGORIES.indexOf(c);
+      list.sort((a,b)=> idx(a.category)-idx(b.category) || ((a.date||"9999")+"").localeCompare(b.date||"9999"));
+    }
+
+    const dated = list.filter(p=>p.date).map(p=>p.date).sort();
+    const range = dated.length ? `${fmtDate(dated[0])} \u2013 ${fmtDate(dated[dated.length-1])}` : "";
+
+    /* ---- Cover ---- */
+    doc.setFillColor(142,59,79); doc.rect(0, 0, W, 8, "F");
+    doc.setFont("times","bold"); doc.setFontSize(26); doc.setTextColor(30,42,58);
+    doc.text(doc.splitTextToSize(title, CW), M, 150);
+    doc.setFont("helvetica","normal"); doc.setFontSize(13); doc.setTextColor(60,72,88);
+    let y = 210;
+    if(names){ doc.text(names, M, y); y+=22; }
+    doc.text(`In support of Form I-751, Petition to Remove Conditions on Residence`, M, y); y+=22;
+    if(range){ doc.text(`Photographs spanning ${range}`, M, y); y+=22; }
+    doc.text(`${list.length} photograph${list.length===1?"":"s"} \u00b7 Prepared ${new Date().toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"})}`, M, y);
+    // category summary
+    y += 40; doc.setFontSize(11.5); doc.setTextColor(90,100,112);
+    const catCounts = {}; list.forEach(p=> catCounts[p.category]=(catCounts[p.category]||0)+1);
+    CATEGORIES.forEach(c=>{ if(catCounts[c]){ doc.text(`${c} \u2014 ${catCounts[c]}`, M, y); y+=17; } });
+    doc.setFontSize(9.5); doc.setTextColor(120,128,138);
+    doc.text(doc.splitTextToSize("The photographs in this exhibit are provided as supporting evidence of an ongoing marital relationship. Captions identify the date, location, individuals shown, and occasion to the best of the petitioners' knowledge.", CW), M, H-110);
+
+    /* ---- Photos ---- */
+    const slotH = perPage===2 ? (H - 2*M - 30) / 2 : (H - 2*M - 20);
+    const maxImgH = perPage===2 ? slotH - 96 : slotH - 120;
+    let slot = 0, lastCat = null;
+    doc.addPage();
+
+    for(let i=0;i<list.length;i++){
+      const p = list[i];
+      // Section header page-band when grouped
+      if(group==="category" && p.category !== lastCat){
+        if(slot !== 0){ doc.addPage(); slot = 0; }
+        doc.setFillColor(142,59,79); doc.rect(M, M-14, CW, 30, "F");
+        doc.setFont("times","bold"); doc.setFontSize(14); doc.setTextColor(255,255,255);
+        doc.text(p.category, M+12, M+6);
+        lastCat = p.category;
+        // shift content start slightly for this page
+      }
+      if(slot >= perPage){ doc.addPage(); slot = 0;
+        if(group==="category"){ // repeat subtle header context
+          doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(142,59,79);
+          doc.text(lastCat, M, M-30);
+        }
+      }
+      const topBase = M + (group==="category" && slot===0 ? 30 : 0);
+      const top = topBase + slot*slotH + (slot? 24 : 0);
+
+      const durl = await blobToDataURL(p.blob);
+      const ar = (p.w||4)/(p.h||3);
+      let iw = CW, ih = iw/ar;
+      if(ih > maxImgH){ ih = maxImgH; iw = ih*ar; }
+      if(iw > CW){ iw = CW; ih = iw/ar; }
+      const ix = M + (CW-iw)/2;
+      doc.addImage(durl, "JPEG", ix, top, iw, ih, undefined, "MEDIUM");
+
+      // Exhibit no + caption block
+      let cy = top + ih + 16;
+      doc.setFont("helvetica","bold"); doc.setFontSize(10.5); doc.setTextColor(142,59,79);
+      const head = `Photo ${i+1}` + (p.date? ` \u00b7 ${fmtDate(p.date)}` : "") + (p.location? ` \u00b7 ${p.location}` : "");
+      doc.text(head, M, cy); cy += 15;
+      doc.setFont("helvetica","normal"); doc.setTextColor(50,60,72); doc.setFontSize(10.5);
+      if(p.people){ const ln = doc.splitTextToSize(`Pictured: ${p.people}`, CW); doc.text(ln, M, cy); cy += ln.length*13; }
+      if(p.caption){ const ln = doc.splitTextToSize(p.caption, CW); doc.text(ln, M, cy); cy += ln.length*13; }
+      slot++;
+    }
+
+    /* ---- Page numbers ---- */
+    const total = doc.getNumberOfPages();
+    for(let n=2; n<=total; n++){
+      doc.setPage(n);
+      doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(130,138,148);
+      doc.text(`Page ${n} of ${total}`, W-M, H-28, {align:"right"});
+      doc.text(title, M, H-28);
+    }
+
+    busy(false);
+    if(mode==="preview"){
+      const url = doc.output("bloburl");
+      const w = window.open(url, "_blank");
+      if(!w){ doc.save("photo-evidence.pdf"); toast("Pop-up blocked \u2014 downloaded instead."); }
+    } else {
+      doc.save("photo-evidence-i751.pdf");
+      toast("PDF saved.");
+    }
+  }catch(err){
+    console.error(err); busy(false);
+    toast("Couldn't build the PDF \u2014 check that the jsPDF library loaded (needs internet once).");
+  }
+}
+
+/* =================== Backup / restore =================== */
+$("backupBtn").addEventListener("click", ()=> $("backupModalBack").classList.add("open"));
+$("backupClose").addEventListener("click", ()=> $("backupModalBack").classList.remove("open"));
+$("exportBackup").addEventListener("click", async ()=>{
+  $("backupModalBack").classList.remove("open");
+  if(!photos.length){ toast("Nothing to back up yet."); return; }
+  busy(true, "Preparing backup\u2026");
+  try{
+    const out = [];
+    for(const p of photos){
+      out.push({ id:p.id, w:p.w, h:p.h, date:p.date, location:p.location, people:p.people,
+        category:p.category, caption:p.caption, notes:p.notes, order:p.order, addedAt:p.addedAt,
+        image: await blobToDataURL(p.blob) });
+    }
+    const blob = new Blob([JSON.stringify({app:"evidence-album", version:1, exportedAt:new Date().toISOString(), photos:out})], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `evidence-album-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.click(); setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+    toast("Backup saved. Keep it somewhere safe.");
+  }catch(e){ console.error(e); toast("Backup failed."); }
+  busy(false);
+});
+$("restoreBtn").addEventListener("click", ()=>{ $("backupModalBack").classList.remove("open"); $("restoreInput").click(); });
+$("restoreInput").addEventListener("change", async e=>{
+  const f = e.target.files[0]; e.target.value="";
+  if(!f) return;
+  busy(true, "Restoring\u2026");
+  try{
+    const data = JSON.parse(await f.text());
+    if(data.app!=="evidence-album" || !Array.isArray(data.photos)) throw new Error("format");
+    let added = 0;
+    for(const r of data.photos){
+      if(photos.some(p=>p.id===r.id)) continue; // skip duplicates
+      const blob = dataURLToBlob(r.image);
+      const th = await compress(blob, 520, 0.8);
+      const rec = {...r, blob, thumb: th.blob};
+      delete rec.image;
+      await dbPut(rec); photos.push(rec); added++;
+    }
+    renderAll();
+    toast(added? `Restored ${added} photo${added===1?"":"s"}.` : "Everything in that backup is already here.");
+  }catch(err){ console.error(err); toast("That file doesn't look like an Evidence Album backup."); }
+  busy(false);
+});
+
+/* =================== Boot =================== */
+(async function(){
+  try{
+    await openDB();
+    photos = await dbAll();
+    if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+  }catch(e){
+    console.error(e);
+    alert("This browser blocked local storage (this can happen in private browsing or in an embedded preview). Open the file in a regular Safari or Chrome window.");
+  }
+  renderAll();
+  initLock();
+})();
+</script>
+</body>
+</html>
